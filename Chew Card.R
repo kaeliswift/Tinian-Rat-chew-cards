@@ -8,8 +8,8 @@ library(adehabitatHR)
 library(raster)
 library(dplyr)
 
-#Read in the data. Needs to be specific to file pathway (i.e may change with device)
-Chew_card_data <- read_excel("C:/Users/kaelis/OneDrive - UW/Tinian Forest Bird project/Rat Chew Card Study/Data/Raw data/Chew card data.xlsx")
+#Kaeli's mac path
+Chew_card_data <- read_excel("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Rat Chew Card Study/Data/Chew card data.xlsx")
 
 #Create a summary table by site 
 #step 1...turn yes/no/unknown into integer format
@@ -41,7 +41,7 @@ Chew_card_data <- Chew_card_data %>%
 #Create output summary with overall detection (=occupancy) rate by habitat type
 summarySite_df <- Chew_card_data %>%
   group_by(Site) %>%
-  summarize(
+  dplyr::summarize(
     Sites = n(),
     Detections = sum(Detected, na.rm = TRUE),
     Detection_Rate = mean(Detected, na.rm = TRUE),
@@ -216,7 +216,7 @@ summary(model)
 
 #Generate a quick summary of detections
 Checkdf <- Checkdf %>%
-  rename(
+  dplyr::rename(
     check1 = `C1 Rat detected`,
     check2 = `C2 Rat detected`,
     check3 = `T Rat detected`
@@ -224,7 +224,7 @@ Checkdf <- Checkdf %>%
 
 Checkdf %>%
   group_by(Site) %>%
-  summarize(
+  dplyr::summarize(
     N_sites = n(),
     N_detected = sum(check1 == 1 | check2 == 1 | check3 == 1, na.rm = TRUE),
     Detection_rate = mean(check1 == 1 | check2 == 1 | check3 == 1, na.rm = TRUE)
@@ -243,7 +243,7 @@ head(Chewdf)
 
 #Change the column names
 Chewdf <- Chewdf %>%
-  rename(
+  dplyr::rename(
     check1 = `C1 Rat detected`,
     check2 = `C2 Rat detected`,
     check3 = `T Rat detected`
@@ -414,31 +414,32 @@ head(Chewdf)
 
 #prepare the unmarked dataframe
 y<-as.matrix(Chewdf[, c("check1", "check2", "check3")])
+
 #assign covariate as a factor
 Chewdf$Site <- as.factor(Chewdf$Site)
+
 #create an unmarked frame
 site_covs <- data.frame(Site = Chewdf$Site)
-umf2 <- unmarkedFrameOccu(y = y, siteCovs = site_covs)
+umf <- unmarkedFrameOccu(y = y, siteCovs = site_covs)
 
-#check that the new data frame looks good
-umf2
+#Run all models 
+m0 <- occu(~1 ~1, data = umf)
 
-#run the null model without the covarite 
-model_null <- occu(~1 ~1, data = umf2)
-summary(model_null)
+m_site <- occu(~ 1 ~Site, umf)
 
-#Now run the model that includes the covariates
-model_site <- occu(~1 ~ Site, data = umf2)
-summary(model_site)
+m_site_det <- occu(~1 ~ Site, data = umf)
+summary(m_site_det)
 
-#Given that the box plot indicated that tangan had much higher detection that the other two, we may not want to assume that detection is the same across habitat types
-#The following code treats the detection probability as being different across sites
-model_site_full <- occu(~ Site ~ Site, data = umf2)
+m_site_both <- occu(~Site ~ Site, data = umf)
+summary(m_site_both)
 
-#Store the model summary
-model_summary <- summary(model_site_full)
+library(MuMIn)
+ms <- model.sel(m0, m_site, m_site_det, m_site_both)
 
-model_summary <- summary(model_site_full)
+ms_out <- ms[, c("df", "AICc", "delta", "weight")]
+round(ms_out, 3)
+
+
 
 #let's look what happens if we only have TWO DAYS
 # Detection history using only check1 and check2
@@ -453,60 +454,70 @@ site_covs_day2 <- data.frame(Site = Chewdf$Site)
 library(unmarked)
 umf_day2 <- unmarkedFrameOccu(y = y_day2, siteCovs = site_covs_day2)
 
-# Null model (no covariates)
-model_null_day2 <- occu(~1 ~1, data = umf_day2)
-summary(model_null_day2)
+#Run all models 
+m0 <- occu(~1 ~1, data = umf_day2)
 
-# Site-only model (occupancy varies by site, constant detection)
-model_site_day2 <- occu(~1 ~ Site, data = umf_day2)
-summary(model_site_day2)
+m_site <- occu(~ 1 ~Site, umf)
 
-# Full model: detection and occupancy both vary by site
-model_site_full_day2 <- occu(~ Site ~ Site, data = umf_day2)
-model_summary_day2 <- summary(model_site_full_day2)
+m_site_det <- occu(~1 ~ Site, data = umf_day2)
+summary(m_site_det)
 
+m_site_both <- occu(~Site ~ Site, data = umf_day2)
+summary(m_site_both)
+
+#compare model performance 
+library(MuMIn)
+msday2 <- model.sel(m0, m_site, m_site_det, m_site_both)
+
+ms_out <- msday2[, c("df", "AICc", "delta", "weight")]
+round(ms_out, 3)
+
+
+
+
+#2/23/26 tried to simplify code, getting rid of this stuff 
 #Attemping to back transform the output into probability scale 
 # Occupancy (logit scale)
-occ_est <- c(Intercept = 1.01, SiteE = 7.46, SiteF = 1.61)
-occ_se  <- c(Intercept = 0.346, SiteE = 37.753, SiteF = 0.891)
+#occ_est <- c(Intercept = 1.01, SiteE = 7.46, SiteF = 1.61)
+#occ_se  <- c(Intercept = 0.346, SiteE = 37.753, SiteF = 0.891)
 
 # Detection (logit scale)
-det_est <- c(Intercept = 0.613, SiteE = -0.900, SiteF = 0.176)
-det_se  <- c(Intercept = 0.268, SiteE = 0.304, SiteF = 0.348)
+#det_est <- c(Intercept = 0.613, SiteE = -0.900, SiteF = 0.176)
+#det_se  <- c(Intercept = 0.268, SiteE = 0.304, SiteF = 0.348)
 
 # Function to calculate back-transformed probability and CI
-back_transform <- function(base, delta = 0, base_se, delta_se = 0) {
+#back_transform <- function(base, delta = 0, base_se, delta_se = 0) {
   # Total estimate and SE
-  total_est <- base + delta
-  total_se <- sqrt(base_se^2 + delta_se^2)
+  #total_est <- base + delta
+  #total_se <- sqrt(base_se^2 + delta_se^2)
   
   # Back-transform and CI
-  prob <- plogis(total_est)
-  ci <- plogis(total_est + c(-1.96, 1.96) * total_se)
+  #prob <- plogis(total_est)
+  #ci <- plogis(total_est + c(-1.96, 1.96) * total_se)
   
   return(list(prob = prob, lower = ci[1], upper = ci[2]))
 }
 
 # Occupancy
-occ_A <- back_transform(occ_est["Intercept"], 0, occ_se["Intercept"])
-occ_E <- back_transform(occ_est["Intercept"], occ_est["SiteE"], occ_se["Intercept"], occ_se["SiteE"])
-occ_F <- back_transform(occ_est["Intercept"], occ_est["SiteF"], occ_se["Intercept"], occ_se["SiteF"])
+#occ_A <- back_transform(occ_est["Intercept"], 0, occ_se["Intercept"])
+#occ_E <- back_transform(occ_est["Intercept"], occ_est["SiteE"], occ_se["Intercept"], occ_se["SiteE"])
+#occ_F <- back_transform(occ_est["Intercept"], occ_est["SiteF"], occ_se["Intercept"], occ_se["SiteF"])
 
 # Detection
-det_A <- back_transform(det_est["Intercept"], 0, det_se["Intercept"])
-det_E <- back_transform(det_est["Intercept"], det_est["SiteE"], det_se["Intercept"], det_se["SiteE"])
-det_F <- back_transform(det_est["Intercept"], det_est["SiteF"], det_se["Intercept"], det_se["SiteF"])
+#det_A <- back_transform(det_est["Intercept"], 0, det_se["Intercept"])
+#det_E <- back_transform(det_est["Intercept"], det_est["SiteE"], det_se["Intercept"], det_se["SiteE"])
+#det_F <- back_transform(det_est["Intercept"], det_est["SiteF"], det_se["Intercept"], det_se["SiteF"])
 
 # Create output data frame
-results <- data.frame(
-  Parameter = rep(c("Occupancy", "Detection"), each = 3),
-  Site = rep(c("A", "E", "F"), times = 2),
-  Estimate = c(occ_A$prob, occ_E$prob, occ_F$prob, det_A$prob, det_E$prob, det_F$prob),
-  CI_lower = c(occ_A$lower, occ_E$lower, occ_F$lower, det_A$lower, det_E$lower, det_F$lower),
-  CI_upper = c(occ_A$upper, occ_E$upper, occ_F$upper, det_A$upper, det_E$upper, det_F$upper)
+#results <- data.frame(
+  #Parameter = rep(c("Occupancy", "Detection"), each = 3),
+  #Site = rep(c("A", "E", "F"), times = 2),
+  #Estimate = c(occ_A$prob, occ_E$prob, occ_F$prob, det_A$prob, det_E$prob, det_F$prob),
+  #CI_lower = c(occ_A$lower, occ_E$lower, occ_F$lower, det_A$lower, det_E$lower, det_F$lower),
+  #CI_upper = c(occ_A$upper, occ_E$upper, occ_F$upper, det_A$upper, det_E$upper, det_F$upper)
 )
 
-print(results)
+#print(results)
 
 
 #Let's visualize the two-day model

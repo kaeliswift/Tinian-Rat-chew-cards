@@ -21,6 +21,9 @@ Chew_card_data <- Chew_card_data %>%
                   . == "Unknown" ~ NA_real_,
                   TRUE           ~ NA_real_
                 )))
+#Quick check to see if that worked. Since site "A" is still in the mix which was only a single check, C1 and C2 fields will be NA
+head(Chew_card_data[, c("Site", "C1 Rat detected", "C2 Rat detected", "T Rat detected")])
+
 #step 2
 #Generating an overall detection column 
 Chew_card_data <- Chew_card_data %>%
@@ -52,42 +55,9 @@ summarySite_df <- Chew_card_data %>%
 #run summary output
 summarySite_df
 
-#Check how often camera traps detected rats
-CT_Data <- dplyr::select(Chew_card_data$`Camera trap deployed?`, `Date of first contact on CT`, `C1 Rat detected`, `C2 Rat detected`, `T Rat detected`)
-
-
+#GENERAL DESCRIPTIVES FOR All sites except A
 #OMIT SITE A since it's check schedule was 5 days instead of 3. 
 Chew_card_data <- Chew_card_data %>% filter(Site != "A")
-
-#GENERAL DESCRIPTIVES FOR ALL REMAINING SITES
-#Step 1, update detection columns from categorical to integer value
-Chew_card_data <- Chew_card_data %>%
-  mutate(across(c(`C1 Rat detected`, `C2 Rat detected`, `T Rat detected`), 
-                ~ case_when(
-                  . == "Yes"     ~ 1,
-                  . == "No"      ~ 0,
-                  . == "Unknown" ~ NA_real_,
-                  TRUE           ~ NA_real_
-                )))
-
-#step 2
-#Generating an overall detection column 
-Chew_card_data <- Chew_card_data %>%
-  mutate(Detected = case_when(
-    # Sites with daily checks (3 detection columns)
-    Site %in% c("D", "E", "F") ~ as.integer(
-      (`C1 Rat detected` == 1 | `C2 Rat detected` == 1 | `T Rat detected` == 1)
-    ),
-    
-    # Sites with only terminal check (1 detection column)
-    Site %in% c("B") ~ as.integer(`T Rat detected` == 1),
-    
-    # Default case (e.g., missing site code)
-    TRUE ~ NA_integer_
-  ))
-
-#Quick check to see if that worked
-head(Chew_card_data[, c("Site", "C1 Rat detected", "C2 Rat detected", "T Rat detected", "Detected")])
 
 #Step 3
 #Creating a new column that groups sites by habitat type 
@@ -147,24 +117,14 @@ ggplot(summary_df, aes(x = Habitat_Type, y = Occupancy_Rate)) +
     text = element_text(family = "Times New Roman")  # Optional: use your desired font
   )
 
-
 #CHECKING CAMERA TRAP DATA
 CT_data <- Chew_card_data %>%
-  dplyr::filter(`Camera trap deployed?` == "1") %>%
+  dplyr::filter(`Camera trap deployed?` == "TRUE") %>%
   dplyr::filter(Site %in% c("B", "D", "E", "F")) %>%
   dplyr::select(Site, `Site name`, Detected, `Date of first contact on CT`)
 
-#Step one (assumed you already have a filtered data set from the steps above)
-Chew_card_data <- Chew_card_data %>%
-  mutate(across(c(`Camera trap deployed?`), 
-                ~ case_when(
-                  . == "TRUE"     ~ 1,
-                  . == "FALSE"      ~ 0,
-                  . == "Unknown" ~ NA_real_,
-                  TRUE           ~ NA_real_
-                )))
-
 #35 Camera trap cards were depredated. 32 of those camereas captures rats
+
 #COMPARING DAILY VS SINGLE CHECKS 
 #Step 1, create the check type column 
 Chew_card_data <- Chew_card_data %>%
@@ -234,25 +194,23 @@ Checkdf %>%
 #Subset data to include on the desired columns and values. In this case I only wanted the `Site`, `Site name`, `C1 Rat detected`, `C2 Rat detected`, `T Rat detected`, `Deployment tree`, `Deployment date`
 #columns and I only wanted it to show me that information from sites D,E anf F, which are the only ones we did daily checks for. 
 #Use %in% to filter for multiple values of a column name such as "Site"
-Chewdf <- Chew_card_data %>%
+Dailydf <- Chew_card_data %>%
   dplyr::filter(Site %in% c("D", "E", "F")) %>%
   dplyr::select(`Site`, `Site name`, `C1 Rat detected`, `C2 Rat detected`, `T Rat detected`, `Deployment tree`, `Deployment date`)
 
-#preview the new dataframe to make sure it's good.  
-head(Chewdf)
-
-#Change the column names
-Chewdf <- Chewdf %>%
+Dailydf <- Dailydf %>%
   dplyr::rename(
     check1 = `C1 Rat detected`,
     check2 = `C2 Rat detected`,
     check3 = `T Rat detected`
   )
 
+#preview the new dataframe to make sure it's good.  
+head(Dailydf)
 
 #Now I want an output that shows me, by site, how many times the first detection (1) happened on C1, C2 or T
 # Step 1: Pivot detection columns to long format
-Chewdf %>%
+Dailydf %>%
   pivot_longer(cols = c(check1, check2, check3),
                names_to = "Card", values_to = "Detection") %>%
   
@@ -270,10 +228,10 @@ Chewdf %>%
   count(Site, Card) %>%
   pivot_wider(names_from = Card, values_from = n, values_fill = 0)
 
-# Now let's run a Chi squared test to look for differenes in detections across check days
+# Now let's run a Chi squared test to look for differences in detections across check days
 #Create detection timing summary table
 
-first_detections <- Chewdf %>%
+first_detections <- Dailydf %>%
   pivot_longer(cols = c(check1, check2, check3),
                names_to = "Card", values_to = "Detection") %>%
   filter(Detection == 1) %>%
@@ -291,7 +249,7 @@ rownames(detection_matrix) <- first_detections$Site
 
 # Run chi-square test
 
-Chewdf$Site <- recode(Chewdf$Site,
+Dailydf$Site <- recode(Dailydf$Site,
                       "D" = "Native\nforest",
                       "E" = "Secondary\nforest",
                       "F" = "Tangan\nforest")
@@ -300,7 +258,7 @@ chisq.test(detection_matrix)
 
 #Rerunning the chisquared test with SITE included
 #Create long format dataset for first detections (with site preserved)
-first_detection_df <- Chewdf %>%
+first_detection_df <- Dailydf %>%
   pivot_longer(cols = c(check1, check2, check3),
                names_to = "Card", values_to = "Detection") %>%
   filter(Detection == 1) %>%
@@ -343,7 +301,7 @@ ggplot(first_detections_long, aes(x = Site, y = Count, fill = Card)) +
 
 #Calculate the propotion of additional chews per day (i.e. replicate Hanslowe stat)
 # Step 1: Reshape to long format
-daily_prop_df <- Chewdf %>%
+daily_prop_df <- Dailydf %>%
   pivot_longer(cols = c(check1, check2, check3),
                names_to = "Day", values_to = "Detection") %>%
   group_by(`Site name`, Day) %>%
@@ -380,25 +338,25 @@ total_average_increase
 #VISUALIZE THE DATA
 #first let's count how many detections occured at each site
 #Step 1 sum the totals for each row
-Chewdf$detections_total <- rowSums(Chewdf[, c("check1", "check2", "check3")], na.rm = TRUE)
+Dailydf$detections_total <- rowSums(Dailydf[, c("check1", "check2", "check3")], na.rm = TRUE)
 #step 2 extract the any time there was at least one detection by site
-tapply(Chewdf$detections_total > 0, Chewdf$Site, sum)
+tapply(Dailydf$detections_total > 0, Dailydf$Site, sum)
 
 #Now I want a box plot that shows the number of detections by site
 #step 1 add a totaled column for detections
-Chewdf$detections_total <- rowSums(Chewdf[, c("check1", "check2", "check3")], na.rm = TRUE)
+Dailydf$detections_total <- rowSums(Dailydf[, c("check1", "check2", "check3")], na.rm = TRUE)
 
 #I want to rename the factor levels so that D,E,F are linked to their forest type
 #If I had "Native forest" that's how it would appear on the plot, but that takes up a lot of space
 #so I have stacked the name by using \n between the first and second word
-Chewdf$Site <- recode(Chewdf$Site,
+Dailydf$Site <- recode(Dailydf$Site,
                       "D" = "Native\nforest",
                       "E" = "Secondary\nforest",
                       "F" = "Tangan\nforest"
 )
 #Create the boxplot
 #cex.axis = 0.7 is the font size. You do not need this code but I added it since they didn't all fit otherwise
-boxplot(detections_total ~ Site, data = Chewdf,
+boxplot(detections_total ~ Site, data = Dailydf,
         main = "Total Detections per Site",
         ylab = "Total Detections (0–3)",
         xlab = "Site",
@@ -410,16 +368,16 @@ boxplot(detections_total ~ Site, data = Chewdf,
 library(unmarked)
 library(terra)
 
-head(Chewdf)
+head(Dailydf)
 
 #prepare the unmarked dataframe
-y<-as.matrix(Chewdf[, c("check1", "check2", "check3")])
+y<-as.matrix(Dailydf[, c("check1", "check2", "check3")])
 
 #assign covariate as a factor
-Chewdf$Site <- as.factor(Chewdf$Site)
+Dailydf$Site <- as.factor(Dailydf$Site)
 
 #create an unmarked frame
-site_covs <- data.frame(Site = Chewdf$Site)
+site_covs <- data.frame(Site = Dailydf$Site)
 umf <- unmarkedFrameOccu(y = y, siteCovs = site_covs)
 
 #Run all models 
@@ -440,16 +398,18 @@ ms_out <- ms[, c("df", "AICc", "delta", "weight")]
 round(ms_out, 3)
 
 
-
 #let's look what happens if we only have TWO DAYS
 # Detection history using only check1 and check2
-y_day2 <- as.matrix(Chewdf[, c("check1", "check2")])
+y_day2 <- as.matrix(Dailydf[, c("check1", "check2")])
+
+table(rowSums(y_day2))
+
 
 # Make sure Site is still a factor
-Chewdf$Site <- as.factor(Chewdf$Site)
+Dailydf$Site <- as.factor(Dailydf$Site)
 
 # Site-level covariates
-site_covs_day2 <- data.frame(Site = Chewdf$Site)
+site_covs_day2 <- data.frame(Site = Dailydf$Site)
 
 library(unmarked)
 umf_day2 <- unmarkedFrameOccu(y = y_day2, siteCovs = site_covs_day2)
@@ -457,9 +417,9 @@ umf_day2 <- unmarkedFrameOccu(y = y_day2, siteCovs = site_covs_day2)
 #Run all models 
 m0 <- occu(~1 ~1, data = umf_day2)
 
-m_site <- occu(~ 1 ~Site, umf)
+m_site <- occu(~1 ~Site, umf)
 
-m_site_det <- occu(~1 ~ Site, data = umf_day2)
+m_site_det <- occu(~Site ~ 1, data = umf_day2)
 summary(m_site_det)
 
 m_site_both <- occu(~Site ~ Site, data = umf_day2)
@@ -495,7 +455,7 @@ round(ms_out, 3)
   #prob <- plogis(total_est)
   #ci <- plogis(total_est + c(-1.96, 1.96) * total_se)
   
-  return(list(prob = prob, lower = ci[1], upper = ci[2]))
+  #return(list(prob = prob, lower = ci[1], upper = ci[2]))
 }
 
 # Occupancy
@@ -566,7 +526,7 @@ summary_compare <- Chewdf %>%
     .groups = "drop"
   )
 
-#Generate alternaitve summary table for naive occupancy 
+#Generate alternative summary table for naive occupancy 
 
 library(tidyr)
 

@@ -21,9 +21,6 @@ Chew_card_data <- Chew_card_data %>%
                   . == "Unknown" ~ NA_real_,
                   TRUE           ~ NA_real_
                 )))
-#Quick check to see if that worked. Since site "A" is still in the mix which was only a single check, C1 and C2 fields will be NA
-head(Chew_card_data[, c("Site", "C1 Rat detected", "C2 Rat detected", "T Rat detected")])
-
 #step 2
 #Generating an overall detection column 
 Chew_card_data <- Chew_card_data %>%
@@ -40,90 +37,6 @@ Chew_card_data <- Chew_card_data %>%
     TRUE ~ NA_integer_
   ))
 
-#Step 3 generate output summary table by site 
-#Create output summary with overall detection (=occupancy) rate by habitat type
-summarySite_df <- Chew_card_data %>%
-  group_by(Site) %>%
-  dplyr::summarize(
-    Sites = n(),
-    Detections = sum(Detected, na.rm = TRUE),
-    Detection_Rate = mean(Detected, na.rm = TRUE),
-    Occupied_Sites = sum(Detections),
-    Occupancy_Rate = (Detections/Sites)
-  )
-
-#run summary output
-summarySite_df
-
-#GENERAL DESCRIPTIVES FOR All sites except A
-#OMIT SITE A since it's check schedule was 5 days instead of 3. 
-Chew_card_data <- Chew_card_data %>% filter(Site != "A")
-
-#Step 3
-#Creating a new column that groups sites by habitat type 
-Chew_card_data <- Chew_card_data %>%
-  mutate(Habitat_Type = case_when(
-    Site %in% c("E") ~ "Secondary\nforest",
-    Site %in% c("B", "F") ~ "Tangan\nforest",
-    Site == c("D") ~ "Native\nforest",
-    TRUE                  ~ NA_character_  # For any unexpected site codes
-  ))
-
-#checks that that worked
-unique(Chew_card_data$Habitat_Type)
-
-#Step 4
-# Create summary table
-summary_df <- Chew_card_data %>%
-  group_by(Habitat_Type) %>%
-  summarize(
-    Sites = n(),
-    Detections = sum(Detected, na.rm = TRUE),
-    Detection_Rate = mean(Detected, na.rm = TRUE),
-    Occupied_Sites = sum(Detections),
-    Occupancy_Rate = (Detections/Sites)
-  )
-
-summary_df 
-
-# Plot detection rate
-ggplot(summary_df, aes(x = Habitat_Type, y = Detection_Rate)) +
-  geom_col(fill = "darkseagreen4") +
-  ylim(0, 1) +
-  labs(
-    title = "Overall Detection Rate by Habitat Type",
-    x = "Habitat Type",
-    y = "Detection Rate"
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    plot.margin = margin(t = 10, r = 20, b = 10, l = 10),
-    text = element_text(family = "Times New Roman")  # Optional: use your desired font
-  )
-
-
-#Plot naive Occupancy rate for all sites surveyed after 3 days (n=400)
-ggplot(summary_df, aes(x = Habitat_Type, y = Occupancy_Rate)) +
-  geom_col(fill = "darkseagreen4") +
-  ylim(0, 1) +
-  labs(
-    title = "Naive Occupancy Rate by Habitat Type",
-    x = "Habitat Type",
-    y = "Occupancy Rate"
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    plot.margin = margin(t = 10, r = 20, b = 10, l = 10),
-    text = element_text(family = "Times New Roman")  # Optional: use your desired font
-  )
-
-#CHECKING CAMERA TRAP DATA
-CT_data <- Chew_card_data %>%
-  dplyr::filter(`Camera trap deployed?` == "TRUE") %>%
-  dplyr::filter(Site %in% c("B", "D", "E", "F")) %>%
-  dplyr::select(Site, `Site name`, Detected, `Date of first contact on CT`)
-
-#35 Camera trap cards were depredated. 32 of those camereas captures rats
 
 #COMPARING DAILY VS SINGLE CHECKS 
 #Step 1, create the check type column 
@@ -159,36 +72,6 @@ det_hist <- Checkdf %>%
   ungroup() %>%
   dplyr::select(det1, det2, det3) %>%
   as.matrix()
-
-#Prepare site-level covariates data frame
-site_covs <- Checkdf %>%
-  dplyr::select(Check_type) %>%
-  mutate(Check_type = factor(Check_type))
-
-#Create unmarkedFrameOccu object
-umf <- unmarkedFrameOccu(y = det_hist, siteCovs = site_covs)
-
-#Fit occupancy model with detection probability depending on Check_type
-model <- occu(~ Check_type ~ 1, data = umf)
-
-# Step 6: Summary of results
-summary(model)
-
-#Generate a quick summary of detections
-Checkdf <- Checkdf %>%
-  dplyr::rename(
-    check1 = `C1 Rat detected`,
-    check2 = `C2 Rat detected`,
-    check3 = `T Rat detected`
-  )
-
-Checkdf %>%
-  group_by(Site) %>%
-  dplyr::summarize(
-    N_sites = n(),
-    N_detected = sum(check1 == 1 | check2 == 1 | check3 == 1, na.rm = TRUE),
-    Detection_rate = mean(check1 == 1 | check2 == 1 | check3 == 1, na.rm = TRUE)
-  )
 
 #ANALYSIS FOR DAILY CHECK SITES ONLY (D,E,F)
 #Subset data to include on the desired columns and values. In this case I only wanted the `Site`, `Site name`, `C1 Rat detected`, `C2 Rat detected`, `T Rat detected`, `Deployment tree`, `Deployment date`
@@ -456,7 +339,7 @@ round(ms_out, 3)
   #ci <- plogis(total_est + c(-1.96, 1.96) * total_se)
   
   #return(list(prob = prob, lower = ci[1], upper = ci[2]))
-}
+
 
 # Occupancy
 #occ_A <- back_transform(occ_est["Intercept"], 0, occ_se["Intercept"])
@@ -481,12 +364,12 @@ round(ms_out, 3)
 
 
 #Let's visualize the two-day model
-Chewdf <- Chewdf %>%
+Dailydf <- Dailydf %>%
   mutate(
     Detected_day2 = as.integer(check1 == 1 | check2 == 1)
   )
 
-summary_day2 <- Chewdf %>%
+summary_day2 <- Dailydf %>%
   group_by(Site) %>%
   summarize(
     Sites = n(),
@@ -510,17 +393,19 @@ ggplot(summary_day2, aes(x = Site, y = Occupancy_Rate)) +
   )
 
 #Now let's visualize occupancy at day 2 vs day three 
-Chewdf <- Chewdf %>%
+Dailydf <- Dailydf %>%
   mutate(
+    Occupancy_day1 = as.integer(check1 == 1),
     Occupancy_day2 = as.integer(check1 == 1 | check2 == 1),
     Occupancy_day3 = as.integer(check1 == 1 | check2 == 1 | check3 == 1)
   )
 
 library(dplyr)
 #generate the summary table for occupancy rate
-summary_compare <- Chewdf %>%
+summary_compare <- Dailydf %>%
   group_by(Site) %>%
   summarize(
+    Occupancy_day1 = mean(Occupancy_day1, na.rm = TRUE),
     Occupancy_day2 = mean(Occupancy_day2, na.rm = TRUE),
     Occupancy_day3 = mean(Occupancy_day3, na.rm = TRUE),
     .groups = "drop"
@@ -534,13 +419,14 @@ summary_long <- summary_compare %>%
   pivot_longer(cols = starts_with("Occupancy"), names_to = "Day", values_to = "Occupancy_Rate") %>%
   mutate(
     Day = recode(Day,
+                 "Occupancy_day1" = "Day 1",
                  "Occupancy_day2" = "Day 2",
                  "Occupancy_day3" = "Day 3")
   )
 
 ggplot(summary_long, aes(x = Site, y = Occupancy_Rate, fill = Day)) +
   geom_col(position = position_dodge(), width = 0.7) +
-  scale_fill_manual(values = c("darkseagreen3", "darkseagreen4")) +
+  scale_fill_manual(values = c("darkseagreen3", "darkseagreen4", "black")) +
   ylim(0, 1) +
   labs(
     title = "Occupancy Rate by Habitat Type",

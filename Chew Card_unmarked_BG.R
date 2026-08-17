@@ -11,7 +11,7 @@ library(dplyr)
 #Read in the data. Needs to be specific to file pathway (i.e may change with device)
 #Kaeli's mac path
 Chew_card_data <- read_excel("/Users/kaeliswift/Library/CloudStorage/OneDrive-UW/Tinian Forest Bird project/Rat Chew Card Study/Data/Chew card data.xlsx")
-#Chew_card_data <- read_excel("C:/Beth/Students/Kaeli/Chew card data.xlsx")
+#Chew_card_data <- read_excel("Data/Chew card data.xlsx")
 
 #Create a summary table by site 
 #step 1...turn yes/no/unknown into integer format
@@ -147,14 +147,39 @@ EffHabxHab <- occu(~ effort + habitat ~ habitat, data = umf)
 # Step 6: Summary of results
 summary(EffHabxHab)
 
-
+AIC(null, EffDetc, EffHabDect, EffHabxHab)
 #Compare models 
 library(MuMIn)
-ms <- model.sel(null, EffOccu, EffHabOccu, EffHabxHab)
+ms <- model.sel(null, EffDetc, EffHabDect, EffHabxHab)
 
 ms_out <- ms[, c("df", "AICc", "delta", "weight")]
 round(ms_out, 3)
 
+
+###Relative abundance
+###First calculate the proportion
+
+length(which(rowSums(det_hist, na.rm=T)[1:100] > 0))
+length(which(rowSums(det_hist, na.rm=T)[101:200] > 0))
+length(which(rowSums(det_hist, na.rm=T)[201:300] > 0))
+length(which(rowSums(det_hist, na.rm=T)[301:400] > 0))
+length(which(rowSums(det_hist, na.rm=T)[401:500] > 0))
+
+
+#3 nights - formula from Hanslowe et al 2022
+#they did not give the equation, so I had to eye ball the intercept
+19.49*.8+2 #(native)
+19.49*.84+2 #(secondary)
+19.49*.99+2 #tangantangan
+19.49*.98+2 #(tangantangan)
+
+#5 nights - formula from Hanslowe et al 2022
+#In this equation they set the intercept to be 0
+23.51*.98 #(secondary)
+
+#BG: I think this is how you got the relative index before, it is based on the 
+#mean number of detections in each forest type for the grids with 3 day checks
+tapply(rowSums(det_hist, na.rm=T)[201:500], habitat[201:500], mean)
 
 #####Create a 2 day encounter history to mimic earlier estimates
 
@@ -169,4 +194,8 @@ umf <- unmarkedFrameOccu(y = det_hist, siteCovs = data.frame(habitat=habitat) )
 
 #Fit null occupancy model
 model.test <- occu(~ habitat ~ habitat, data = umf)
+
+
+
+
 
